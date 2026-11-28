@@ -53,6 +53,8 @@ static void genDeliverUnmapped(CompilerScratch* csb, const BoolExprNodeStack& pa
 	BoolExprNodeStack& deliverStack, MapNode* map, StreamType shellStream);
 static ValueExprNode* resolveUsingField(DsqlCompilerScratch* dsqlScratch, const MetaName& name,
 	ValueListNode* list, const FieldNode* flawedNode, const TEXT* side, dsql_ctx*& ctx);
+static void collectAllStreams(const ExprNode* node, SortedStreamList& streams);
+static bool hidesStreams(const ExprNode* node, const StreamList& streams);
 
 namespace
 {
@@ -137,11 +139,16 @@ namespace
 	}
 
 	// Search through the list of ANDed booleans to find comparisons
-	// referring streams of parent select expressions.
+	// referring streams of the parent select expression.
 	// Extract those booleans and return them to the caller.
+	// A comparison that refers to a stream of the parent or of the sub-query
+	// itself only from inside a nested record source (a derived table, an
+	// aggregate, a union, etc) stays in the sub-query: the join would not see
+	// that reference and would evaluate the comparison with a stale record.
 
 	bool findDependentBooleans(CompilerScratch* csb,
 							   const StreamList& rseStreams,
+							   const StreamList& subStreams,
 							   BoolExprNode** parentBoolean,
 							   BoolExprNodeStack& booleanStack)
 	{
@@ -150,9 +157,9 @@ namespace
 		const auto binaryNode = nodeAs<BinaryBoolNode>(boolean);
 		if (binaryNode && binaryNode->blrOp == blr_and)
 		{
-			const bool found1 = findDependentBooleans(csb, rseStreams,
+			const bool found1 = findDependentBooleans(csb, rseStreams, subStreams,
 				binaryNode->arg1.getAddress(), booleanStack);
-			const bool found2 = findDependentBooleans(csb, rseStreams,
+			const bool found2 = findDependentBooleans(csb, rseStreams, subStreams,
 				binaryNode->arg2.getAddress(), booleanStack);
 
 			if (!binaryNode->arg1 && !binaryNode->arg2)
@@ -167,7 +174,8 @@ namespace
 
 		if (const auto cmpNode = nodeAs<ComparativeBoolNode>(boolean))
 		{
-			if (cmpNode->blrOp == blr_eql || cmpNode->blrOp == blr_equiv)
+			if ((cmpNode->blrOp == blr_eql || cmpNode->blrOp == blr_equiv) &&
+				!hidesStreams(cmpNode, rseStreams) && !hidesStreams(cmpNode, subStreams))
 			{
 				SortedStreamList streams;
 				cmpNode->collectStreams(streams);
@@ -227,11 +235,11 @@ namespace
 			{
 				// Find booleans convertable into semi-joins
 
-				StreamList streams;
-				rse->computeRseStreams(streams);
+				StreamList subStreams;
+				rse->computeRseStreams(subStreams);
 
 				BoolExprNodeStack booleans;
-				if (findDependentBooleans(csb, rseStreams,
+				if (findDependentBooleans(csb, rseStreams, subStreams,
 										  rse->rse_boolean.getAddress(),
 										  booleans))
 				{
@@ -250,9 +258,12 @@ namespace
 
 					// Ensure that no external references are left inside the subquery.
 					// If so, mark the RSE as joined and add it to the stack.
+					// The nested record sources are searched, too: a reference
+					// inside a derived table, an aggregate, a union, a window or
+					// a sort of the sub-query keeps it a sub-query.
 
 					SortedStreamList streams;
-					rse->collectStreams(streams);
+					collectAllStreams(rse, streams);
 
 					bool dependent = false;
 					for (const auto stream : streams)
@@ -2311,6 +2322,146 @@ bool AggregateSourceNode::containsStream(StreamType checkStream) const
 
 	if (rse->containsStream(checkStream))
 		return true;		// do not mark as variant
+
+	return false;
+}
+
+// The streams an expression refers to, the nested record sources included.
+// ExprNode::collectStreams does not look into the source of an aggregate, a
+// union, a window or a procedure, nor into the sort, the projection and the
+// aggregate of a nested RSE
+
+static void collectAllStreams(const ExprNode* node, SortedStreamList& streams);
+
+static void collectAllStreams(const SortNode* sort, SortedStreamList& streams)
+{
+	if (sort)
+	{
+		for (const auto expr : sort->expressions)
+			collectAllStreams(expr, streams);
+	}
+}
+
+static void collectAllStreams(const MapNode* map, SortedStreamList& streams)
+{
+	if (map)
+	{
+		for (const auto expr : map->sourceList)
+			collectAllStreams(expr, streams);
+	}
+}
+
+static void collectAllStreams(const ExprNode* node, SortedStreamList& streams)
+{
+	if (!node)
+		return;
+
+	node->collectStreams(streams);
+
+	if (const_cast<ExprNode*>(node)->getKind() == ExprNode::KIND_REC_SOURCE)
+	{
+		static_cast<const RecordSourceNode*>(node)->collectNestedStreams(streams);
+		return;
+	}
+
+	NodeRefsHolder holder;
+	node->getChildren(holder, false);
+
+	for (const auto ref : holder.refs)
+		collectAllStreams(*ref, streams);
+}
+
+static void collectAllStreams(const WindowClause::FrameExtent* frameExtent, SortedStreamList& streams)
+{
+	if (!frameExtent)
+		return;
+
+	if (frameExtent->frame1)
+		collectAllStreams(frameExtent->frame1->value, streams);
+
+	if (frameExtent->frame2)
+		collectAllStreams(frameExtent->frame2->value, streams);
+}
+
+void ProcedureSourceNode::collectNestedStreams(SortedStreamList& streamList) const
+{
+	collectAllStreams(inputSources, streamList);
+	collectAllStreams(inputTargets, streamList);
+}
+
+void AggregateSourceNode::collectNestedStreams(SortedStreamList& streamList) const
+{
+	collectAllStreams(rse, streamList);
+	collectAllStreams(group, streamList);
+	collectAllStreams(map, streamList);
+}
+
+void UnionSourceNode::collectNestedStreams(SortedStreamList& streamList) const
+{
+	for (const auto clause : clauses)
+		collectAllStreams(clause, streamList);
+
+	for (const auto map : maps)
+		collectAllStreams(map, streamList);
+}
+
+void WindowSourceNode::collectNestedStreams(SortedStreamList& streamList) const
+{
+	collectAllStreams(rse, streamList);
+
+	for (const auto& window : windows)
+	{
+		collectAllStreams(window.group, streamList);
+		collectAllStreams(window.regroup, streamList);
+		collectAllStreams(window.order, streamList);
+		collectAllStreams(window.map, streamList);
+		collectAllStreams(window.frameExtent, streamList);
+	}
+}
+
+void RseNode::collectNestedStreams(SortedStreamList& streamList) const
+{
+	collectAllStreams(rse_first, streamList);
+	collectAllStreams(rse_skip, streamList);
+	collectAllStreams(rse_boolean, streamList);
+	collectAllStreams(rse_sorted, streamList);
+	collectAllStreams(rse_projection, streamList);
+	collectAllStreams(rse_aggregate, streamList);
+
+	for (const auto sub : rse_relations)
+		collectAllStreams(sub, streamList);
+}
+
+// Whether an expression refers to one of the streams inside a nested record
+// source only: the checks of the row weights pass (containsAnyStream,
+// isDependent) see the streams ExprNode::collectStreams reports, so such an
+// expression would let the pass count a stream the expression reads
+
+static bool hidesStreams(const ExprNode* node, const StreamList& streams)
+{
+	if (!node)
+		return false;
+
+	// The optimizer places every conjunct on its own: a stream another
+	// conjunct refers to does not make this one visible
+	if (const auto binaryNode = nodeAs<BinaryBoolNode>(node))
+	{
+		if (binaryNode->blrOp == blr_and)
+		{
+			return hidesStreams(binaryNode->arg1, streams) ||
+				hidesStreams(binaryNode->arg2, streams);
+		}
+	}
+
+	SortedStreamList visible, all;
+	node->collectStreams(visible);
+	collectAllStreams(node, all);
+
+	for (const auto stream : streams)
+	{
+		if (all.exist(stream) && !visible.exist(stream))
+			return true;
+	}
 
 	return false;
 }

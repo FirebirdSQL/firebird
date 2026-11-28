@@ -1306,6 +1306,13 @@ public:
 			streamList.add(getStream());
 	}
 
+	// The streams the expressions of the nested record sources refer to: the
+	// parts collectStreams() does not visit (see collectAllStreams() in
+	// RecordSourceNodes.cpp)
+	virtual void collectNestedStreams(SortedStreamList& /*streamList*/) const
+	{
+	}
+
 	bool sameAs(const ExprNode* /*other*/, bool /*ignoreStreams*/) const override
 	{
 		return false;
