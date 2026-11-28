@@ -53,6 +53,9 @@ TRANSACTION` is invalid.
    using named references (e.g., `:p1`), while only requiring a single bind from the client application.
 4. **Mixed Parameter Binding**: You can mix declared parameters (bound via `?` in the declaration) and direct
    positional parameters (using `?` inside the `DO` command).
+5. **Named Parameters**: Declared parameters may also be bound to named parameters, as in
+   `using (x integer = :p) do ...`, and the `DO` command may use named parameters that are not declared.
+   See [README.named_parameters.md](README.named_parameters.md).
 
 ## Examples
 
